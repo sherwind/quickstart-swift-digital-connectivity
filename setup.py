@@ -25,8 +25,6 @@ setuptools.setup(
         "aws-cdk.aws_codepipeline==1.86.0",
         "aws_cdk.aws_codepipeline_actions==1.86.0",
         "aws_cdk.pipelines==1.86.0",
-        "aws_cdk.aws_rds==1.86.0",
-        "aws_cdk.aws_amazonmq==1.86.0",
         "cdk_ec2_key_pair==2.1.1",
         "boto3",
     ],

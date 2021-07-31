@@ -7,8 +7,7 @@ class TestSSMSessionConnection(ParentTestCase):
 
     def __init__(self, methodName='runTest'):
         super().__init__(methodName)
-        self.snl_session_id = None
-        self.amh_session_id = None
+        self.dirlink_session_id = None
         self.session_ids = []
 
     def tearDown(self) -> None:
@@ -16,13 +15,9 @@ class TestSSMSessionConnection(ParentTestCase):
         for session_id in self.session_ids:
             self.ssm_client.terminate_session(SessionId=session_id)
 
-    def test_snl_ssm_connection(self):
-        """test SSM session manager connection with sag snl ec2 instances"""
-        self.common_test_ssm_connection("SAGSNL")
-
-    def test_amh_ssm_connection(self):
-        """test SSM session manager connection with amh instances"""
-        self.common_test_ssm_connection("AMH")
+    def test_dirlink_ssm_connection(self):
+        """test SSM session manager connection with sil dirlink ec2 instances"""
+        self.common_test_ssm_connection("SILDIRLINK")
 
     def common_test_ssm_connection(self, component: str):
         """test SSM session manager connection with any instances"""

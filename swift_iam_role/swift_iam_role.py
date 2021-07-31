@@ -3,7 +3,6 @@ from typing import List
 
 from aws_cdk import (
     core,
-    aws_rds as _rds,
     aws_iam as _iam
 )
 
@@ -12,15 +11,13 @@ class SwiftIAMRole(core.NestedStack):
     """Nested Stack for the sample IAM Role creation for Managing SWIFT components"""
 
     # pylint: disable=too-many-arguments
-    def __init__(self, scope: core.Construct, cid: str, instance_ids: List[str], mq_broker_arn: str,
-                 database_instance: _rds.DatabaseInstance, **kwargs):
+    def __init__(self, scope: core.Construct, cid: str, instance_ids: List[str], **kwargs):
         super().__init__(scope, cid, **kwargs)
 
         self.create_swift_instance_operator_role(instance_ids)
 
         self.create_swift_infrastructure_role(
-            database_instance=database_instance, instance_ids=instance_ids,
-            mq_broker_arn=mq_broker_arn)
+            instance_ids=instance_ids)
 
     def create_swift_instance_operator_role(self, instance_ids):
         """create swift instance operator role"""
@@ -63,8 +60,7 @@ class SwiftIAMRole(core.NestedStack):
             force=True)
 
     def create_swift_infrastructure_role(
-            self, database_instance: _rds.DatabaseInstance, instance_ids: List[str],
-            mq_broker_arn: str):
+            self, instance_ids: List[str]):
         """create swift infrastructure role"""
         swift_infrastructure_role = \
             _iam.Role(self, "SWIFTInfrastructureRole",
@@ -79,20 +75,11 @@ class SwiftIAMRole(core.NestedStack):
                     "arn:aws:ec2:" + self.region + ":" + self.account + ":instance/" + instance_id)
         statements = [
             _iam.PolicyStatement(
-                effect=_iam.Effect.ALLOW, actions=["rds:Describe*"],
-                resources=["*"]),
-            _iam.PolicyStatement(
-                effect=_iam.Effect.ALLOW, actions=["rds:Start*", "rds:Stop*"],
-                resources=[database_instance.instance_arn]),
-            _iam.PolicyStatement(
                 effect=_iam.Effect.ALLOW, actions=["ec2:Describe*"],
                 resources=["*"]),
             _iam.PolicyStatement(
                 effect=_iam.Effect.ALLOW, actions=["ec2:Start*", "ec2:Stop*"],
                 resources=instances_resource),
-            _iam.PolicyStatement(
-                effect=_iam.Effect.ALLOW, actions=["mq:List*", "mq:Describe*", "mq:RebootBroker"],
-                resources=[mq_broker_arn]),
             _iam.PolicyStatement(
                 effect=_iam.Effect.ALLOW, actions=["logs:List*", "logs:Describe*", "logs:Get*"],
                 resources=["*"])]

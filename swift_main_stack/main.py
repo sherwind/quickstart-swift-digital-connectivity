@@ -9,11 +9,8 @@ from cmk.generic_cmk import GenericCMK
 from network.generic_network import GenericNetwork
 from network.swift_vpc_endpoints import SwiftVPCEndpoints
 from security.swift_security import SWIFTSecurity
-from swift_amh.swift_amh import SwiftAMH
-from swift_database.swift_database import SwiftDatabase
 from swift_iam_role.swift_iam_role import SwiftIAMRole
-from swift_mq.swift_mq import SwiftMQ
-from swift_sagsnl.swift_sagsnl import SwiftSAGSNL
+from swift_sildirlink.swift_sildirlink import SwiftSILDIRLINK
 from utilities.swift_components import SwiftComponents
 
 
@@ -32,12 +29,9 @@ class SwiftMain(core.Stack):
         network_stack = GenericNetwork(
             self, "SwiftConnectivityVPC", cidr_range=self.node.try_get_context("vpc_cidr"))
         network_stack.set_vgw(True)
-        network_stack.add_isolated_subnets(SwiftComponents.SAGSNL)
-        network_stack.add_isolated_subnets(SwiftComponents.AMH)
-        network_stack.add_isolated_subnets("Database")
-        network_stack.add_isolated_subnets("MQ")
+        network_stack.add_isolated_subnets(SwiftComponents.SILDIRLINK)
         network_stack.set_vgw_propagation_subnet(
-            _ec2.SubnetSelection(subnet_name=SwiftComponents.SAGSNL))
+            _ec2.SubnetSelection(subnet_name=SwiftComponents.SILDIRLINK))
         network_stack.generate()
 
         # Create security constructs ( IAM Role, SGs, SG Rules, NACLs )
@@ -54,45 +48,24 @@ class SwiftMain(core.Stack):
                     description="KeyPair for the systems operator, just in case."
                     )
 
-        # Create SAGSNL instance , should deploy
+        # Create SILDIRLINK instance , should deploy
         # the instance to the AZ that's according to the provided IP
-        sagsnl_ami = self.node.try_get_context("sagsnl_ami")
-        if not sagsnl_ami:
-            sagsnl_ami = None
-        sag_snls = []
+        sildirlink_ami = self.node.try_get_context("sildirlink_ami")
+        if not sildirlink_ami:
+            sildirlink_ami = None
+        sil_dirlinks = []
         for i in range(1, 3):
-            sag_snl = SwiftSAGSNL(
-                self, cid=SwiftComponents.SAGSNL + str(i),
+            sil_dirlink = SwiftSILDIRLINK(
+                self, cid=SwiftComponents.SILDIRLINK + str(i),
                 network=network_stack, security=security_stack,
                 workload_key=workload_key, ops_key=ops_key_pair,
-                private_ip=self.node.try_get_context("sagsnl" + str(i) + "_ip"),
-                ami_id=sagsnl_ami,
+                private_ip=self.node.try_get_context("sildirlink" + str(i) + "_ip"),
+                ami_id=sildirlink_ami,
                 vpc_subnets=_ec2.SubnetSelection(
                     availability_zones=[self.availability_zones[i - 1]],
-                    subnet_group_name=SwiftComponents.SAGSNL)
+                    subnet_group_name=SwiftComponents.SILDIRLINK)
             )
-            sag_snls.append(sag_snl.get_instance_id())
-
-        amh_ami = self.node.try_get_context("amh_ami")
-        if not amh_ami:
-            amh_ami = None
-        # Create AMH instance
-        amhs = []
-        for i in range(1, 3):
-            amh = SwiftAMH(self, cid=SwiftComponents.AMH + str(i),
-                           network=network_stack, security=security_stack,
-                           ami_id=amh_ami,
-                           workload_key=workload_key,
-                           ops_key=ops_key_pair
-                           )
-            amhs.append(amh.get_instance_id())
-
-        # Create RDS Oracle for AMH to use
-        database_stack = SwiftDatabase(self, "Database", network_stack,
-                                       security_stack, workload_key)
-        # Create Amazon MQ broker for AMH as jms integration
-        mq_broker = SwiftMQ(self, "MQMessageBroker", network_stack,
-                            security_stack, workload_key)
+            sil_dirlinks.append(sil_dirlink.get_instance_id())
 
         # enforce Security group and rule and nacls after the components are created
         security_stack.enforce_security_groups_rules()
@@ -100,23 +73,18 @@ class SwiftMain(core.Stack):
 
         # Create VPC endpoints and VPC Endpoints policy
         SwiftVPCEndpoints(self, "VPCEndPointStack",
-                          application_names=[SwiftComponents.AMH, SwiftComponents.SAGSNL],
+                          application_names=[SwiftComponents.SILDIRLINK],
                           instance_roles_map=security_stack.get_instance_roles(),
                           endpoint_sg=security_stack.get_security_group("VPCEndpointSG"),
                           vpc=network_stack.get_vpc(),
-                          instance_ids={SwiftComponents.AMH: amhs,
-                                        SwiftComponents.SAGSNL: sag_snls}
+                          instance_ids={SwiftComponents.SILDIRLINK: sil_dirlinks}
                           )
-        for count, value in enumerate(sag_snls):
-            core.CfnOutput(self, "SAGSNL" + str(count + 1) + "InstanceID", value=value)
-        for count, value in enumerate(amhs):
-            core.CfnOutput(self, "AMH" + str(count + 1) + "InstanceID", value=value)
+        for count, value in enumerate(sil_dirlinks):
+            core.CfnOutput(self, "SILDIRLINK" + str(count + 1) + "InstanceID", value=value)
         core.CfnOutput(self, "VPCID", value=network_stack.get_vpc().vpc_id)
 
         # Create sample role for accessing the components created
         if self.node.try_get_context("create_sample_iam_role") == "true":
             SwiftIAMRole(self, "IAMRole",
-                         instance_ids=sag_snls + amhs,
-                         database_instance=database_stack.get_db_instance(),
-                         mq_broker_arn=mq_broker.get_arn()
+                         instance_ids=sil_dirlinks
                          )
